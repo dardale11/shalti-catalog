@@ -1,0 +1,44 @@
+{
+  "specs": {
+    "puffs": { "he": "כמות שאיפות", "en": "Puffs", "type": "number" },
+    "liquidMl": { "he": "נפח נוזל", "en": "E-liquid", "type": "number", "unit": "ml" },
+    "podMl": { "he": "נפח פוד", "en": "Pod capacity", "type": "number", "unit": "ml" },
+    "nicotineMg": { "he": "חוזק ניקוטין", "en": "Nicotine", "type": "number", "unit": "mg/ml" },
+    "nicotineType": { "he": "סוג ניקוטין", "en": "Nicotine type", "type": "enum", "options": ["salt", "freebase"] },
+    "style": { "he": "סגנון שאיפה", "en": "Draw style", "type": "enum", "options": ["MTL", "DL", "RDL"] },
+    "batteryMah": { "he": "סוללה", "en": "Battery", "type": "number", "unit": "mAh" },
+    "builtInBattery": { "he": "סוללה מובנית", "en": "Built-in battery", "type": "boolean" },
+    "wattMax": { "he": "הספק מקסימלי", "en": "Max power", "type": "number", "unit": "W" },
+    "resistanceOhm": { "he": "התנגדות", "en": "Coil resistance", "type": "text", "unit": "Ω" },
+    "coil": { "he": "סליל", "en": "Coil", "type": "text" },
+    "chargingPort": { "he": "טעינה", "en": "Charging", "type": "text" },
+    "rechargeable": { "he": "נטען", "en": "Rechargeable", "type": "boolean" },
+    "screen": { "he": "מסך", "en": "Display", "type": "boolean" },
+    "airflow": { "he": "ויסות אוויר", "en": "Adjustable airflow", "type": "boolean" },
+    "dimensions": { "he": "מידות", "en": "Dimensions", "type": "text" }
+  },
+  "enumLabels": {
+    "salt": { "he": "ניקוטין סולט", "en": "Nic salt" },
+    "freebase": { "he": "רגיל (פריבייס)", "en": "Freebase" },
+    "MTL": { "he": "MTL (פה-ריאה)", "en": "MTL (mouth-to-lung)" },
+    "DL": { "he": "DL (ריאה ישירה)", "en": "DL (direct lung)" },
+    "RDL": { "he": "RDL (ריאה מוגבלת)", "en": "RDL (restricted lung)" }
+  },
+  "flavorFamilies": {
+    "fruit": { "he": "פירות", "en": "Fruit" },
+    "berry": { "he": "פירות יער", "en": "Berry" },
+    "tropical": { "he": "טרופי", "en": "Tropical" },
+    "menthol": { "he": "מנטה / קרח", "en": "Menthol / Ice" },
+    "tobacco": { "he": "טבק", "en": "Tobacco" },
+    "dessert": { "he": "קינוחים", "en": "Dessert" },
+    "drink": { "he": "משקאות", "en": "Drinks" },
+    "candy": { "he": "ממתקים", "en": "Candy" }
+  },
+  "categorySpecs": {
+    "disposable": ["puffs", "liquidMl", "nicotineMg", "nicotineType", "batteryMah", "rechargeable", "chargingPort", "coil", "screen", "airflow"],
+    "pod": ["style", "batteryMah", "builtInBattery", "wattMax", "podMl", "resistanceOhm", "coil", "chargingPort", "screen", "airflow", "dimensions"],
+    "mod": ["style", "batteryMah", "builtInBattery", "wattMax", "podMl", "resistanceOhm", "coil", "chargingPort", "screen", "airflow", "dimensions"],
+    "liquid": ["liquidMl", "nicotineMg", "nicotineType"],
+    "accessory": ["resistanceOhm", "coil", "dimensions"]
+  }
+}
