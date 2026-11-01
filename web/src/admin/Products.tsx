@@ -7,6 +7,8 @@ import { autoFill } from './aiApply';
 import { moveItem } from './reorder';
 
 const isEmpty = (p: Product) => !p.description.he && !p.description.en && !Object.keys(p.specs).length;
+// What the bulk AI fill targets: no info yet, or no photos.
+const isMissing = (p: Product) => isEmpty(p) || !p.images.length;
 
 export function Products() {
   const { data, refresh } = useAdmin();
@@ -26,7 +28,7 @@ export function Products() {
       (p) =>
         (!brand || p.brandId === brand) &&
         (!cat || p.categoryId === cat) &&
-        (view !== 'empty' || isEmpty(p)) &&
+        (view !== 'empty' || isMissing(p)) &&
         (view !== 'review' || p.needsReview) &&
         (!nq || `${p.name.he} ${p.name.en} ${brandName(p.brandId)}`.toLowerCase().includes(nq)),
     );
@@ -34,7 +36,7 @@ export function Products() {
   }, [products, q, brand, cat, view]);
 
   const filtered = !!(q || brand || cat || view);
-  const emptyCount = products.filter(isEmpty).length;
+  const emptyCount = products.filter(isMissing).length;
   const reviewCount = products.filter((p) => p.needsReview).length;
 
   async function patch(p: Product, body: Partial<Product>) {
@@ -43,7 +45,7 @@ export function Products() {
   }
 
   async function fillAll() {
-    const targets = list.filter(isEmpty);
+    const targets = list.filter(isMissing);
     if (!targets.length) return alert('Nothing to fill in the current list.');
     if (!confirm(`Look up ${targets.length} product(s) with Claude? Takes ~1–2 min each, runs 2 at a time.`)) return;
     const state = { done: 0, total: targets.length, current: '', errors: [] as string[], stop: false };
@@ -90,15 +92,15 @@ export function Products() {
         </select>
         <select value={view} onChange={(e) => setView(e.target.value as typeof view)}>
           <option value="">All</option>
-          <option value="empty">Missing info ({emptyCount})</option>
+          <option value="empty">Missing info / photos ({emptyCount})</option>
           <option value="review">Needs review ({reviewCount})</option>
         </select>
         <div className="spacer" />
         {bulk && bulk.current ? (
           <button className="btn" onClick={() => setBulk((b) => (b && ((b.stop = true), { ...b })))}>Stop after current</button>
         ) : (
-          <button className="btn" onClick={fillAll} title="Runs AI lookup for listed products that have no description/specs">
-            ✨ AI fill missing ({list.filter(isEmpty).length})
+          <button className="btn" onClick={fillAll} title="Runs AI lookup for listed products that have no description/specs or no photos">
+            ✨ AI fill missing ({list.filter(isMissing).length})
           </button>
         )}
       </div>
@@ -136,6 +138,7 @@ export function Products() {
                   <div className="muted" lang="he">{p.name.he}</div>
                   {p.needsReview && <span className="tag warn">review</span>}
                   {isEmpty(p) && <span className="tag">no info</span>}
+                  {!isEmpty(p) && !p.images.length && <span className="tag">no photo</span>}
                 </td>
                 <td className="hide-sm">{brandName(p.brandId)}</td>
                 <td className="hide-sm">{catName(p.categoryId)}</td>

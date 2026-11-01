@@ -114,7 +114,7 @@ admin.post('/upload', express.raw({ type: 'image/*', limit: '10mb' }), (req, res
 admin.post('/import-image', wrap(async (req, res) => {
   const url = new URL(String(req.body.url));
   if (!/^https?:$/.test(url.protocol)) return res.status(400).json({ error: 'bad url' });
-  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 shalti-catalog' }, signal: AbortSignal.timeout(20_000) });
+  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36' }, signal: AbortSignal.timeout(20_000) });
   const type = (r.headers.get('content-type') || '').split(';')[0];
   if (!r.ok || !EXT[type]) return res.status(400).json({ error: `not an image (${r.status} ${type})` });
   const buf = Buffer.from(await r.arrayBuffer());

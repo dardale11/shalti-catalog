@@ -88,7 +88,7 @@ export function ProductPage() {
               {keys.map((k) => (
                 <div key={k}>
                   <dt>{SPECS[k][lang]}</dt>
-                  <dd>{formatSpec(k, p.specs[k], lang)}</dd>
+                  <dd><bdi>{formatSpec(k, p.specs[k], lang)}</bdi></dd>
                 </div>
               ))}
             </dl>

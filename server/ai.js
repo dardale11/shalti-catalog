@@ -93,12 +93,62 @@ export function aiLookup(query, hint) {
         const env = JSON.parse(out);
         if (env.is_error) throw new Error(env.result || 'Claude returned an error');
         const data = env.structured_output ?? extractJson(env.result);
-        resolve({ ...data, costUsd: env.total_cost_usd });
+        withPageImages(data, query).then((imageUrls) => resolve({ ...data, imageUrls, costUsd: env.total_cost_usd }));
       } catch (e) {
         reject(new Error(`AI lookup failed (exit ${code}): ${e.message}\n${err.slice(-500)}`));
       }
     });
   });
+}
+
+// Claude's page reader drops <img> tags, so it often can't return image links. Scrape the source
+// pages it found for og:image + product-looking images, and keep only URLs that really serve an image.
+const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36';
+const MAX_IMAGES = 8;
+
+async function withPageImages(data, query) {
+  const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+  const candidates = [...(data.imageUrls ?? [])];
+  for (const page of (data.sourceUrls ?? []).slice(0, 3)) {
+    try {
+      const r = await fetch(page, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15_000) });
+      if (!r.ok) continue;
+      const html = await r.text();
+      const abs = (u) => { try { return new URL(u.replace(/&amp;/g, '&'), page).href; } catch { return null; } };
+      const og = [...html.matchAll(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*content=["']([^"']+)/gi)].map((m) => m[1]);
+      const imgs = [...html.matchAll(/<img[^>]+(?:data-src|data-large_image|src)=["']([^"']+\.(?:jpe?g|png|webp)[^"']*)["']/gi)]
+        .map((m) => m[1])
+        // Prefer images whose filename mentions the model; skip logos/icons/thumbnails.
+        .filter((u) => !/logo|icon|banner|sprite|avatar|payment|-\d{2,3}x\d{2,3}\./i.test(u))
+        .filter((u) => words.some((w) => u.toLowerCase().includes(w)));
+      candidates.push(...og, ...imgs);
+    } catch { /* source page unreachable */ }
+  }
+  // Same image is often listed at several sizes (?MaxWidth=...): keep one per file path.
+  const byPath = new Map();
+  for (const raw of candidates) {
+    try {
+      const u = new URL(raw.replace(/&amp;/g, '&'));
+      const key = u.origin + u.pathname;
+      if (!byPath.has(key)) byPath.set(key, u.href);
+    } catch { /* not a URL */ }
+  }
+  const ok = [];
+  for (const u of byPath.values()) {
+    if (ok.length >= MAX_IMAGES) break;
+    if (await isImage(u)) ok.push(u);
+  }
+  return ok;
+}
+
+async function isImage(url) {
+  try {
+    const r = await fetch(url, { method: 'GET', headers: { 'User-Agent': UA, Range: 'bytes=0-0' }, signal: AbortSignal.timeout(10_000) });
+    r.body?.cancel();
+    return r.ok && /^image\//.test(r.headers.get('content-type') || '');
+  } catch {
+    return false;
+  }
 }
 
 function extractJson(text = '') {
