@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { useCatalog } from './CatalogContext';
@@ -12,13 +12,17 @@ export function CatalogLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const idle = useIdle((catalog?.settings.idleSeconds ?? 60) * 1000);
+  // Staff-only way out of the kiosk: hold the logo for 2s to open admin (switch login / sign out there).
+  const holdLogo = useLongPress(2000, () => navigate('/admin'));
 
   // Kiosk reset: after inactivity go back to the start so the next customer starts fresh.
   useEffect(() => {
     if (idle && location.pathname !== '/') navigate('/', { replace: true });
   }, [idle, location.pathname, navigate]);
 
-  useEffect(() => window.scrollTo(0, 0), [location.pathname]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   if (locked) return <Gate />;
   if (!catalog) return <div className="center muted">…</div>;
@@ -35,7 +39,7 @@ export function CatalogLayout() {
             </button>
           )}
         </div>
-        <Link to="/" className="brandmark">
+        <Link to="/" className="brandmark" {...holdLogo} onContextMenu={(e) => e.preventDefault()}>
           <img src={LOGO} alt="" />
           <span>{lang === 'he' ? 'שלתי הזקן' : 'Shalti HaZaken'}</span>
         </Link>
@@ -53,6 +57,23 @@ export function CatalogLayout() {
       {idle && <Screensaver />}
     </div>
   );
+}
+
+function useLongPress(ms: number, onHold: () => void) {
+  const timer = useRef<number>();
+  const held = useRef(false);
+  const cancel = () => clearTimeout(timer.current);
+  return {
+    onPointerDown: () => {
+      held.current = false;
+      timer.current = window.setTimeout(() => ((held.current = true), onHold()), ms);
+    },
+    onPointerUp: cancel,
+    onPointerLeave: cancel,
+    onPointerCancel: cancel,
+    // The click that ends a long press must not also follow the link.
+    onClick: (e: React.MouseEvent) => held.current && e.preventDefault(),
+  };
 }
 
 function useIdle(ms: number) {

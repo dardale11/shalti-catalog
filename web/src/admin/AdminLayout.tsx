@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { login, logout } from '../api';
+import { currentRole, login, logout } from '../api';
 import { AdminProvider, useAdmin } from './AdminContext';
 import { LOGO } from '../assets';
 
@@ -40,6 +40,11 @@ function AdminShell() {
 function AdminLogin({ onDone }: { onDone: () => void }) {
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
+  const [shopSignedIn, setShopSignedIn] = useState(false);
+  useEffect(() => {
+    currentRole().then((r) => setShopSignedIn(r === 'shop'));
+  }, []);
+  const toCatalog = () => window.location.assign(import.meta.env.BASE_URL);
   return (
     <div className="gate" dir="ltr">
       <img src={LOGO} alt="" className="gate-logo" />
@@ -59,6 +64,12 @@ function AdminLogin({ onDone }: { onDone: () => void }) {
         <input id="pw" type="password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)} />
         {err && <div className="error">{err}</div>}
         <button className="btn primary">Log in</button>
+        <button type="button" className="link" onClick={toCatalog}>Back to catalog</button>
+        {shopSignedIn && (
+          <button type="button" className="link" onClick={() => logout().then(toCatalog)}>
+            Sign this device out of the shop login
+          </button>
+        )}
       </form>
     </div>
   );
