@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { clearToken, login } from '../api';
+import { login, logout } from '../api';
 import { AdminProvider, useAdmin } from './AdminContext';
+import { LOGO } from '../assets';
 
 export function AdminRoot() {
   return (
@@ -19,7 +20,7 @@ function AdminShell() {
   return (
     <div className="admin" dir="ltr" lang="en">
       <header className="admin-bar">
-        <img src="/logo-round.png" alt="" />
+        <img src={LOGO} alt="" />
         <strong>Catalog admin</strong>
         <nav>
           <NavLink to="/admin" end>Products</NavLink>
@@ -28,8 +29,8 @@ function AdminShell() {
           <NavLink to="/admin/settings">Settings</NavLink>
         </nav>
         <div className="spacer" />
-        <a href="/" target="_blank" rel="noreferrer">Open catalog ↗</a>
-        <button className="link" onClick={() => (clearToken('admin'), setAuthed(false), navigate('/admin'))}>Log out</button>
+        <a href={import.meta.env.BASE_URL} target="_blank" rel="noreferrer">Open catalog ↗</a>
+        <button className="link" onClick={() => logout().then(() => (setAuthed(false), navigate('/admin')))}>Log out</button>
       </header>
       <main className="admin-main">{data ? <Outlet /> : <p>Loading…</p>}</main>
     </div>
@@ -41,7 +42,7 @@ function AdminLogin({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState('');
   return (
     <div className="gate" dir="ltr">
-      <img src="/logo-round.png" alt="" className="gate-logo" />
+      <img src={LOGO} alt="" className="gate-logo" />
       <form
         className="gate-form"
         onSubmit={async (e) => {

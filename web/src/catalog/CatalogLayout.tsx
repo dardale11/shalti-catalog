@@ -4,6 +4,7 @@ import { useI18n } from '../i18n';
 import { useCatalog } from './CatalogContext';
 import { Gate } from './Gate';
 import { Screensaver } from './Screensaver';
+import { LOGO } from '../assets';
 
 export function CatalogLayout() {
   const { t, lang, setLang } = useI18n();
@@ -35,7 +36,7 @@ export function CatalogLayout() {
           )}
         </div>
         <Link to="/" className="brandmark">
-          <img src="/logo-round.png" alt="" />
+          <img src={LOGO} alt="" />
           <span>{lang === 'he' ? 'שלתי הזקן' : 'Shalti HaZaken'}</span>
         </Link>
         <div className="topbar-side end">

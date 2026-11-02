@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { admin } from '../api';
+import { saveItem } from '../api';
 import type { Product, ProductStatus } from '../types';
 import { useAdmin } from './AdminContext';
 import { autoFill } from './aiApply';
@@ -11,7 +11,7 @@ const isEmpty = (p: Product) => !p.description.he && !p.description.en && !Objec
 const isMissing = (p: Product) => isEmpty(p) || !p.images.length;
 
 export function Products() {
-  const { data, refresh } = useAdmin();
+  const { data, refresh, ai } = useAdmin();
   const [q, setQ] = useState('');
   const [brand, setBrand] = useState('');
   const [cat, setCat] = useState('');
@@ -40,7 +40,7 @@ export function Products() {
   const reviewCount = products.filter((p) => p.needsReview).length;
 
   async function patch(p: Product, body: Partial<Product>) {
-    await admin.put(`/products/${p.id}`, body);
+    await saveItem('products', { ...p, ...body });
     refresh();
   }
 
@@ -77,7 +77,7 @@ export function Products() {
         <h1>Products <span className="muted">({products.length})</span></h1>
         <div className="spacer" />
         <Link className="btn" to="/admin/product/new">+ New product</Link>
-        <Link className="btn primary" to="/admin/product/new?ai=1">✨ Add with AI</Link>
+        {ai && <Link className="btn primary" to="/admin/product/new?ai=1">✨ Add with AI</Link>}
       </div>
 
       <div className="toolbar">
@@ -96,7 +96,9 @@ export function Products() {
           <option value="review">Needs review ({reviewCount})</option>
         </select>
         <div className="spacer" />
-        {bulk && bulk.current ? (
+        {!ai ? (
+          <span className="muted small" title="Run `npm run helper` on the laptop with Claude Code to enable AI">AI tools: offline</span>
+        ) : bulk && bulk.current ? (
           <button className="btn" onClick={() => setBulk((b) => (b && ((b.stop = true), { ...b })))}>Stop after current</button>
         ) : (
           <button className="btn" onClick={fillAll} title="Runs AI lookup for listed products that have no description/specs or no photos">

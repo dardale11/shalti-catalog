@@ -1,49 +1,144 @@
-const TOKEN_KEY = { shop: 'shalti.shopToken', admin: 'shalti.adminToken' } as const;
-type Role = keyof typeof TOKEN_KEY;
+// Data access: Supabase (Postgres + Storage + Auth). Row-level security in supabase/schema.sql
+// decides what the shop and admin logins can read/write; nothing is public.
+import { createClient } from '@supabase/supabase-js';
+import type { Brand, Catalog, Category, Product, Settings } from './types';
 
-export const getToken = (role: Role) => localStorage.getItem(TOKEN_KEY[role]);
-export const clearToken = (role: Role) => localStorage.removeItem(TOKEN_KEY[role]);
+export const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
+
+// Two shared logins; users only ever type the code/password.
+const EMAILS = { shop: 'shop@shalti-catalog.app', admin: 'admin@shalti-catalog.app' } as const;
+export type Role = keyof typeof EMAILS;
 
 export class AuthError extends Error {}
 
 export async function login(role: Role, secret: string) {
-  const r = await fetch('/api/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role, secret }),
-  });
-  if (!r.ok) throw new AuthError('wrong code');
-  const { token } = await r.json();
-  localStorage.setItem(TOKEN_KEY[role], token);
+  const { error } = await supabase.auth.signInWithPassword({ email: EMAILS[role], password: secret.trim() });
+  if (error) throw new AuthError(error.message);
 }
 
-async function request<T>(role: Role, method: string, url: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { Authorization: `Bearer ${getToken(role) ?? ''}` };
-  let payload: BodyInit | undefined;
-  if (body instanceof Blob) {
-    headers['Content-Type'] = body.type;
-    payload = body;
-  } else if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-    payload = JSON.stringify(body);
+export const logout = () => supabase.auth.signOut();
+
+export async function currentRole(): Promise<Role | null> {
+  const { data } = await supabase.auth.getSession();
+  return (data.session?.user.app_metadata?.role as Role) ?? null;
+}
+
+// ---------- rows <-> objects ----------
+type Kind = 'categories' | 'brands' | 'products';
+type Row = { id: string; sort: number; data: Record<string, unknown> };
+type Item = { id: string; order: number };
+
+const fromRow = <T,>(r: Row): T => ({ ...r.data, id: r.id, order: r.sort }) as T;
+function toRow(item: Item & Record<string, unknown>): Row {
+  const { id, order, price: _price, ...data } = item;
+  return { id, sort: order ?? 0, data };
+}
+
+function check<T>(res: { data: T; error: { message: string; code?: string } | null }): T {
+  if (res.error) {
+    if (res.error.code === 'PGRST301' || /JWT/i.test(res.error.message)) throw new AuthError(res.error.message);
+    throw new Error(res.error.message);
   }
-  const r = await fetch(url, { method, headers, body: payload });
-  if (r.status === 401) {
-    clearToken(role);
-    throw new AuthError('unauthorized');
+  return res.data;
+}
+
+const byOrder = <T extends Item>(a: T, b: T) => a.order - b.order;
+
+// Shop screens and admin both load everything; prices only come back when allowed by RLS.
+export async function loadCatalog(): Promise<Catalog> {
+  const [settings, categories, brands, products, prices] = await Promise.all([
+    supabase.from('settings').select('data').eq('id', 1).maybeSingle(),
+    supabase.from('categories').select('id,sort,data'),
+    supabase.from('brands').select('id,sort,data'),
+    supabase.from('products').select('id,sort,data'),
+    supabase.from('product_prices').select('product_id,price'),
+  ]).then((all) => all.map((r) => check(r as { data: unknown; error: { message: string; code?: string } | null })));
+  const priceOf = new Map((prices as { product_id: string; price: number }[]).map((p) => [p.product_id, Number(p.price)]));
+  return {
+    settings: { showPrices: false, idleSeconds: 60, currency: '₪', ...((settings as { data: Settings } | null)?.data ?? {}) },
+    categories: (categories as Row[]).map((r) => fromRow<Category>(r)).sort(byOrder),
+    brands: (brands as Row[]).map((r) => fromRow<Brand>(r)).sort(byOrder),
+    products: (products as Row[])
+      .map((r) => ({ ...fromRow<Product>(r), price: priceOf.get(r.id) ?? null }))
+      .sort(byOrder),
+  };
+}
+
+// Fires on any catalog change (admin saves) so screens refresh live.
+export function subscribeChanges(onChange: () => void) {
+  const ch = supabase.channel('catalog-changes');
+  for (const table of ['settings', 'categories', 'brands', 'products', 'product_prices']) {
+    ch.on('postgres_changes', { event: '*', schema: 'public', table }, onChange);
   }
+  ch.subscribe();
+  return () => void supabase.removeChannel(ch);
+}
+
+// ---------- admin writes ----------
+const rid = () => crypto.randomUUID().slice(0, 8);
+
+export async function createItem<T extends Item>(kind: Kind, list: Item[], item: Partial<T>): Promise<T> {
+  const full = { ...item, id: rid(), order: list.reduce((m, x) => Math.max(m, x.order), 0) + 1 } as T & Record<string, unknown>;
+  check(await supabase.from(kind).insert(toRow(full)));
+  if (kind === 'products') await savePrice(full.id, (full as unknown as Product).price);
+  return full;
+}
+
+export async function saveItem<T extends Item>(kind: Kind, item: T): Promise<T> {
+  const full = { ...item, updatedAt: Date.now() } as T & Record<string, unknown>;
+  check(await supabase.from(kind).update({ ...toRow(full), updated_at: new Date().toISOString() }).eq('id', item.id));
+  if (kind === 'products' && 'price' in full) await savePrice(full.id, (full as unknown as Product).price);
+  return full;
+}
+
+async function savePrice(productId: string, price: number | null | undefined) {
+  if (price == null || Number.isNaN(price)) check(await supabase.from('product_prices').delete().eq('product_id', productId));
+  else check(await supabase.from('product_prices').upsert({ product_id: productId, price }));
+}
+
+export async function deleteItem(kind: Kind, id: string) {
+  check(await supabase.from(kind).delete().eq('id', id));
+}
+
+export async function setOrder(kind: Kind, items: Item[]) {
+  await Promise.all(items.map((x) => supabase.from(kind).update({ sort: x.order }).eq('id', x.id).then(check)));
+}
+
+export async function saveSettings(settings: Settings) {
+  check(await supabase.from('settings').update({ data: settings }).eq('id', 1));
+}
+
+const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' };
+
+export async function uploadBlob(blob: Blob): Promise<string> {
+  const name = `${Date.now().toString(36)}-${rid()}.${EXT[blob.type] ?? 'jpg'}`;
+  check(await supabase.storage.from('images').upload(name, blob, { contentType: blob.type, cacheControl: '31536000' }));
+  return supabase.storage.from('images').getPublicUrl(name).data.publicUrl;
+}
+
+// ---------- AI helper (only on the laptop running `npm run helper`) ----------
+// The hosted site has no server; AI lookups and fetching images from other sites go through a small
+// local helper that drives the Claude Code CLI. The admin UI shows the AI buttons only when it answers.
+export const HELPER_URL = (import.meta.env.VITE_HELPER_URL as string) || 'http://localhost:8840';
+
+export async function helperAvailable(): Promise<boolean> {
+  try {
+    const r = await fetch(`${HELPER_URL}/health`, { signal: AbortSignal.timeout(1500) });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function helperPost<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`${HELPER_URL}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data as T;
 }
 
-export const shopGet = <T>(url: string) => request<T>('shop', 'GET', url);
-
-export const admin = {
-  get: <T>(url: string) => request<T>('admin', 'GET', `/api/admin${url}`),
-  post: <T>(url: string, body?: unknown) => request<T>('admin', 'POST', `/api/admin${url}`, body),
-  put: <T>(url: string, body: unknown) => request<T>('admin', 'PUT', `/api/admin${url}`, body),
-  del: (url: string) => request<{ ok: true }>('admin', 'DELETE', `/api/admin${url}`),
-};
-
-export const eventsUrl = () => `/api/events?t=${encodeURIComponent(getToken('shop') ?? getToken('admin') ?? '')}`;
+export async function helperFetchImage(url: string): Promise<Blob> {
+  const r = await fetch(`${HELPER_URL}/fetch-image?url=${encodeURIComponent(url)}`);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'image fetch failed');
+  return r.blob();
+}

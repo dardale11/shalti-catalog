@@ -1,17 +1,17 @@
-import { admin } from '../api';
+import { createItem, helperPost, saveItem } from '../api';
 import type { AiDraft, Brand, Catalog, Product } from '../types';
 import { importImage } from './images';
 
 const rid = () => Math.random().toString(36).slice(2, 10);
 const same = (a = '', b = '') => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-export const runAiLookup = (query: string, hint?: string) => admin.post<AiDraft>('/ai-lookup', { query, hint });
+export const runAiLookup = (query: string, hint?: string) => helperPost<AiDraft>('/ai-lookup', { query, hint });
 
 // Finds the brand the AI named, creating it if the shop doesn't have it yet.
 export async function resolveBrand(data: Catalog, draft: AiDraft): Promise<string> {
   const hit = data.brands.find((b) => same(b.name.en, draft.brand.en) || same(b.name.he, draft.brand.he));
   if (hit) return hit.id;
-  const created = await admin.post<Brand>('/brands', { name: draft.brand, logo: '', visible: true });
+  const created = await createItem<Brand>('brands', data.brands, { name: draft.brand, logo: '', visible: true });
   data.brands.push(created);
   return created.id;
 }
@@ -62,5 +62,5 @@ export async function autoFill(data: Catalog, product: Product): Promise<Product
   const draft = await runAiLookup(query, `Hebrew listing name: ${product.name.he}`);
   const merged = mergeDraft(product, draft);
   const images = product.images.length ? product.images : await importImages(draft.imageUrls, 3);
-  return admin.put<Product>(`/products/${product.id}`, { ...merged, images, needsReview: true, aiSources: draft.sourceUrls });
+  return saveItem('products', { ...product, ...merged, images, needsReview: true, aiSources: draft.sourceUrls } as Product);
 }

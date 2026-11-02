@@ -2,16 +2,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const api = 'http://localhost:8840';
-
 export default defineConfig({
   root: 'web',
+  // Sub-path hosting (GitHub Pages serves at /<repo>/); '/' everywhere else.
+  base: process.env.BASE_PATH || '/',
   build: { outDir: '../dist', emptyOutDir: true },
-  server: {
-    host: true,
-    proxy: { '/api': api, '/uploads': api },
-    fs: { allow: ['..'] },
-  },
+  server: { host: true, fs: { allow: ['..'] } },
   plugins: [
     react(),
     VitePWA({
@@ -32,12 +28,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallbackDenylist: [/^\/api/, /^\/uploads/],
         runtimeCaching: [
-          // Catalog data: fresh when online, last copy when the shop Wi-Fi drops.
-          { urlPattern: /\/api\/catalog/, handler: 'NetworkFirst', options: { cacheName: 'catalog', networkTimeoutSeconds: 4 } },
-          // Uploaded images have unique names, so cache forever.
-          { urlPattern: /\/uploads\//, handler: 'CacheFirst', options: { cacheName: 'images', expiration: { maxEntries: 1000 } } },
+          // Catalog data is also kept in localStorage; product images have unique names, so cache forever.
+          { urlPattern: /\/storage\/v1\/object\/public\//, handler: 'CacheFirst', options: { cacheName: 'images', expiration: { maxEntries: 1000 }, cacheableResponse: { statuses: [0, 200] } } },
           { urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//, handler: 'StaleWhileRevalidate', options: { cacheName: 'fonts' } },
         ],
       },

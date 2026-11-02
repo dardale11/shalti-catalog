@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { login } from '../api';
 import { useI18n } from '../i18n';
 import { useCatalog } from './CatalogContext';
+import { LOGO } from '../assets';
 
 // One-time unlock per shop device, so the catalog isn't publicly browsable.
 export function Gate() {
@@ -22,7 +23,7 @@ export function Gate() {
 
   return (
     <div className="gate">
-      <img src="/logo-round.png" alt="" className="gate-logo" />
+      <img src={LOGO} alt="" className="gate-logo" />
       <form onSubmit={submit} className="gate-form">
         <label htmlFor="code">{t('enterCode')}</label>
         <input id="code" type="password" inputMode="numeric" autoFocus value={code} onChange={(e) => (setCode(e.target.value), setError(false))} />

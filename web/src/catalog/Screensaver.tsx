@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../i18n';
 import { useCatalog } from './CatalogContext';
+import { LOGO } from '../assets';
 
 const SLIDE_MS = 6000;
 
@@ -35,7 +36,7 @@ export function Screensaver() {
           </div>
         </div>
       ) : (
-        <img src="/logo-round.png" alt="" className="ss-logo" />
+        <img src={LOGO} alt="" className="ss-logo" />
       )}
       <div className="ss-hint">{t('tapToStart')}</div>
     </div>

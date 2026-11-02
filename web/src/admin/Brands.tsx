@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { admin } from '../api';
+import { createItem, deleteItem, saveItem } from '../api';
 import type { Brand } from '../types';
 import { useAdmin } from './AdminContext';
 import { uploadImage } from './images';
@@ -13,17 +13,17 @@ export function Brands() {
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!name.he && !name.en) return;
-    await admin.post('/brands', { name, logo: '', visible: true });
+    await createItem<Brand>('brands', data!.brands, { name, logo: '', visible: true });
     setName({ he: '', en: '' });
     refresh();
   }
 
-  const patch = async (b: Brand, body: Partial<Brand>) => (await admin.put(`/brands/${b.id}`, body), refresh());
+  const patch = async (b: Brand, body: Partial<Brand>) => (await saveItem('brands', { ...b, ...body }), refresh());
 
   async function remove(b: Brand) {
     if (count(b.id)) return alert('Move or delete this brand’s products first.');
     if (!confirm(`Delete brand "${b.name.en}"?`)) return;
-    await admin.del(`/brands/${b.id}`);
+    await deleteItem('brands', b.id);
     refresh();
   }
 

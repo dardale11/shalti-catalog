@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import type { Product } from '../types';
 import { useCatalog } from './CatalogContext';
+import { LOGO } from '../assets';
 
 export function ProductCard({ product: p, showBrand }: { product: Product; showBrand?: boolean }) {
   const { t, tr } = useI18n();
@@ -36,7 +37,7 @@ export function ProductCard({ product: p, showBrand }: { product: Product; showB
 export function Placeholder({ text }: { text: string }) {
   return (
     <div className="placeholder">
-      <img src="/logo-round.png" alt="" />
+      <img src={LOGO} alt="" />
       <span>{text}</span>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { admin } from '../api';
+import { createItem, deleteItem, saveItem } from '../api';
 import { TEMPLATES } from '../i18n';
 import type { Category } from '../types';
 import { useAdmin } from './AdminContext';
@@ -10,12 +10,12 @@ export function Categories() {
   const { data, refresh } = useAdmin();
   const [draft, setDraft] = useState({ he: '', en: '', template: TEMPLATES[0] });
   const count = (id: string) => data!.products.filter((p) => p.categoryId === id).length;
-  const patch = async (c: Category, body: Partial<Category>) => (await admin.put(`/categories/${c.id}`, body), refresh());
+  const patch = async (c: Category, body: Partial<Category>) => (await saveItem('categories', { ...c, ...body }), refresh());
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!draft.he && !draft.en) return;
-    await admin.post('/categories', { name: { he: draft.he, en: draft.en }, template: draft.template });
+    await createItem<Category>('categories', data!.categories, { name: { he: draft.he, en: draft.en }, template: draft.template });
     setDraft({ he: '', en: '', template: TEMPLATES[0] });
     refresh();
   }
@@ -23,7 +23,7 @@ export function Categories() {
   async function remove(c: Category) {
     if (count(c.id)) return alert('Move this category’s products first.');
     if (!confirm(`Delete category "${c.name.en}"?`)) return;
-    await admin.del(`/categories/${c.id}`);
+    await deleteItem('categories', c.id);
     refresh();
   }
 

@@ -3,12 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n api,web \"node --watch server/index.js\" \"vite\"",
+    "dev": "concurrently -k -n helper,web \"node --watch server/index.js\" \"vite\"",
+    "helper": "node server/index.js",
     "build": "tsc -p web && vite build",
-    "start": "NODE_ENV=production node server/index.js",
-    "seed": "node scripts/seed.js"
+    "preview": "vite preview",
+    "seed": "node scripts/seed.js",
+    "setup:supabase": "node scripts/setup-supabase.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "express": "^4.22.3"
   },
   "devDependencies": {

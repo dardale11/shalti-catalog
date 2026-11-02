@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { admin } from '../api';
+import { createItem, deleteItem, saveItem } from '../api';
 import { CATEGORY_SPECS, ENUM_LABELS, FLAVOR_FAMILIES, SPECS } from '../i18n';
 import type { AiDraft, Bi, Product } from '../types';
 import { useAdmin } from './AdminContext';
@@ -25,12 +25,12 @@ export function ProductForm() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { data, refresh } = useAdmin();
+  const { data, refresh, ai } = useAdmin();
   const existing = data!.products.find((p) => p.id === id);
   const isNew = !existing;
   const [p, setP] = useState<Partial<Product>>(() => existing ?? blank(data!.brands[0]?.id, data!.categories[0]?.id));
   const [saving, setSaving] = useState(false);
-  const [showAi, setShowAi] = useState(params.get('ai') === '1');
+  const [showAi, setShowAi] = useState(ai && params.get('ai') === '1');
 
   useEffect(() => {
     if (existing) setP(existing);
@@ -56,7 +56,7 @@ export function ProductForm() {
     setSaving(true);
     try {
       const body = { ...p, needsReview: false };
-      const saved = isNew ? await admin.post<Product>('/products', body) : await admin.put<Product>(`/products/${existing!.id}`, body);
+      const saved = isNew ? await createItem<Product>('products', data!.products, body) : await saveItem('products', { ...existing!, ...body } as Product);
       await refresh();
       navigate(isNew ? `/admin/product/${saved.id}` : '/admin', { replace: isNew });
     } catch (e) {
@@ -68,7 +68,7 @@ export function ProductForm() {
 
   async function remove() {
     if (!existing || !confirm(`Delete "${existing.name.en || existing.name.he}"? This cannot be undone.`)) return;
-    await admin.del(`/products/${existing.id}`);
+    await deleteItem('products', existing.id);
     await refresh();
     navigate('/admin');
   }
@@ -96,7 +96,7 @@ export function ProductForm() {
         <button className="link" onClick={() => navigate('/admin')}>← Products</button>
         <h1>{isNew ? 'New product' : p.name?.en || p.name?.he}</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setShowAi((s) => !s)}>✨ {showAi ? 'Hide AI' : 'Fill with AI'}</button>
+        {ai && <button className="btn" onClick={() => setShowAi((s) => !s)}>✨ {showAi ? 'Hide AI' : 'Fill with AI'}</button>}
         {!isNew && <button className="btn danger" onClick={remove}>Delete</button>}
         <button className="btn primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save'}</button>
       </div>
@@ -151,7 +151,7 @@ export function ProductForm() {
 
         <section className="card">
           <h2>Images</h2>
-          <ImageList images={p.images ?? []} onChange={(imgs) => set('images', imgs)} />
+          <ImageList images={p.images ?? []} onChange={(imgs) => set('images', imgs)} allowUrl={ai} />
         </section>
 
         <section className="card">
@@ -219,7 +219,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="field"><span>{label}</span>{children}</label>;
 }
 
-function ImageList({ images, onChange }: { images: string[]; onChange: (v: string[]) => void }) {
+function ImageList({ images, onChange, allowUrl }: { images: string[]; onChange: (v: string[]) => void; allowUrl: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState('');
@@ -275,11 +275,11 @@ function ImageList({ images, onChange }: { images: string[]; onChange: (v: strin
           {busy ? '…' : '+ Upload\n(or drop files)'}
         </button>
       </div>
-      <input ref={input} type="file" accept="image/*" multiple capture="environment" hidden onChange={(e) => addFiles(e.target.files)} />
-      <div className="inline">
+      <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => addFiles(e.target.files)} />
+      {allowUrl && <div className="inline">
         <input placeholder="…or paste image URL" value={url} onChange={(e) => setUrl(e.target.value)} />
         <button type="button" className="btn" onClick={addUrl} disabled={busy || !url}>Add</button>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -1,11 +1,11 @@
-import { admin } from '../api';
+import { saveSettings } from '../api';
 import type { Settings as S } from '../types';
 import { useAdmin } from './AdminContext';
 
 export function Settings() {
   const { data, refresh } = useAdmin();
   const s = data!.settings;
-  const save = async (patch: Partial<S>) => (await admin.put('/settings', patch), refresh());
+  const save = async (patch: Partial<S>) => (await saveSettings({ ...s, ...patch }), refresh());
 
   return (
     <div>

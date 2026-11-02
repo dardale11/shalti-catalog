@@ -2,3 +2,6 @@ node_modules
 dist
 data/
 .env
+.env.local
+web/.env.local
+credentials.local.txt

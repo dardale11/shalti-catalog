@@ -1,34 +1,41 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { admin, AuthError, getToken } from '../api';
+import { AuthError, currentRole, helperAvailable, loadCatalog } from '../api';
 import type { Catalog } from '../types';
 
-type State = { data: Catalog | null; refresh: () => Promise<void>; authed: boolean; setAuthed: (v: boolean) => void };
+type State = {
+  data: Catalog | null;
+  refresh: () => Promise<void>;
+  authed: boolean | null;
+  setAuthed: (v: boolean) => void;
+  /** Local AI helper reachable (only on the laptop running `npm run helper`). */
+  ai: boolean;
+};
 const Ctx = createContext<State>(null!);
-
-const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
 
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<Catalog | null>(null);
-  const [authed, setAuthed] = useState(!!getToken('admin'));
+  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [ai, setAi] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const d = await admin.get<Catalog>('/data');
-      d.brands.sort(byOrder);
-      d.categories.sort(byOrder);
-      d.products.sort(byOrder);
-      setData(d);
+      setData(await loadCatalog());
     } catch (e) {
       if (e instanceof AuthError) setAuthed(false);
-      else throw e;
+      else alert((e as Error).message);
     }
+  }, []);
+
+  useEffect(() => {
+    currentRole().then((r) => setAuthed(r === 'admin'));
+    helperAvailable().then(setAi);
   }, []);
 
   useEffect(() => {
     if (authed) refresh();
   }, [authed, refresh]);
 
-  return <Ctx.Provider value={{ data, refresh, authed, setAuthed }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ data, refresh, authed, setAuthed, ai }}>{children}</Ctx.Provider>;
 }
 
 export const useAdmin = () => useContext(Ctx);

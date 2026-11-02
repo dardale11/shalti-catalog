@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AuthError, eventsUrl, getToken, shopGet } from '../api';
+import { AuthError, currentRole, loadCatalog, login, subscribeChanges } from '../api';
 import type { Brand, Catalog, Product } from '../types';
 
 const CACHE_KEY = 'shalti.catalog';
@@ -8,7 +8,6 @@ type State = {
   catalog: Catalog | null;
   locked: boolean;
   offline: boolean;
-  error: string;
   reload: () => void;
   brandById: Map<string, Brand>;
   productsOf: (brandId: string) => Product[];
@@ -16,63 +15,76 @@ type State = {
 
 const Ctx = createContext<State>(null!);
 
-const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
+// What shop screens show: visible brands, non-hidden products.
+function forScreens(c: Catalog): Catalog {
+  const brands = c.brands.filter((b) => b.visible !== false);
+  const ids = new Set(brands.map((b) => b.id));
+  return { ...c, brands, products: c.products.filter((p) => p.status !== 'hidden' && ids.has(p.brandId)) };
+}
+
+// A device can be logged in by opening the catalog link with ?key=<shop code> once (e.g. from a QR code).
+async function consumeKeyFromUrl() {
+  const url = new URL(location.href);
+  const key = url.searchParams.get('key');
+  if (!key) return;
+  url.searchParams.delete('key');
+  history.replaceState(null, '', url.pathname + url.search + url.hash);
+  await login('shop', key).catch(() => undefined);
+}
 
 export function CatalogProvider({ children }: { children: ReactNode }) {
   const [catalog, setCatalog] = useState<Catalog | null>(() => {
     const raw = localStorage.getItem(CACHE_KEY);
     return raw ? JSON.parse(raw) : null;
   });
-  const [locked, setLocked] = useState(!getToken('shop') && !getToken('admin'));
+  const [locked, setLocked] = useState(false);
+  const [ready, setReady] = useState(false);
   const [offline, setOffline] = useState(false);
-  const [error, setError] = useState('');
 
   const reload = useCallback(async () => {
-    if (!getToken('shop') && !getToken('admin')) return setLocked(true);
     try {
-      const data = await shopGet<Catalog>('/api/catalog');
-      data.brands.sort(byOrder);
-      data.products.sort(byOrder);
-      data.categories.sort(byOrder);
+      const data = forScreens(await loadCatalog());
       setCatalog(data);
-      setLocked(false);
       setOffline(false);
-      setError('');
       localStorage.setItem(CACHE_KEY, JSON.stringify(data));
     } catch (e) {
       if (e instanceof AuthError) setLocked(true);
-      else {
-        setOffline(true);
-        setError((e as Error).message);
-      }
+      else setOffline(true);
     }
   }, []);
 
   useEffect(() => {
-    reload();
+    (async () => {
+      await consumeKeyFromUrl();
+      const role = await currentRole();
+      setLocked(!role);
+      setReady(true);
+      if (role) reload();
+    })();
   }, [reload]);
 
-  // Live refresh when the admin saves; EventSource reconnects on its own after Wi-Fi drops.
+  // Live refresh when the admin saves anything.
   useEffect(() => {
-    if (locked) return;
-    const es = new EventSource(eventsUrl());
-    es.onmessage = () => reload();
-    es.onopen = () => reload();
-    return () => es.close();
-  }, [locked, reload]);
+    if (locked || !ready) return;
+    const off = subscribeChanges(reload);
+    const onOnline = () => reload();
+    window.addEventListener('online', onOnline);
+    return () => (off(), window.removeEventListener('online', onOnline));
+  }, [locked, ready, reload]);
+
+  const unlock = useCallback(() => (setLocked(false), reload()), [reload]);
 
   const value = useMemo<State>(() => {
     const brandById = new Map((catalog?.brands ?? []).map((b) => [b.id, b]));
     return {
-      catalog,
+      catalog: ready ? catalog : null,
       locked,
       offline,
-      error,
-      reload,
+      reload: unlock,
       brandById,
       productsOf: (brandId) => (catalog?.products ?? []).filter((p) => p.brandId === brandId),
     };
-  }, [catalog, locked, offline, error, reload]);
+  }, [catalog, locked, offline, ready, unlock]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
