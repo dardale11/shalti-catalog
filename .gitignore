@@ -5,3 +5,4 @@ data/
 .env.local
 web/.env.local
 credentials.local.txt
+*.docker-bak
