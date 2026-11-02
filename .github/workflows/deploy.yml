@@ -22,6 +22,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
+      - name: Check Supabase variables
+        run: test -n "${{ vars.SUPABASE_URL }}" -a -n "${{ vars.SUPABASE_ANON_KEY }}" || { echo "::error::Set repo variables SUPABASE_URL and SUPABASE_ANON_KEY"; exit 1; }
       - run: npm ci
       - run: npm run build
         env:
